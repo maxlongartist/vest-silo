@@ -2,12 +2,15 @@
 
 Vest Silo is a standalone macOS widget for tracking your Vest Markets positions. The collapsed bar shows your open position count and combined unrealized P&L. Expand it to see entry and current mark prices, estimated fail prices, and account drawdown in one row per account.
 
-## Get started
+## Install on macOS
 
-1. Download or clone this repository on a Mac. You’ll need macOS 13 or newer and Apple’s Command Line Tools. If they aren’t installed, run `xcode-select --install` first.
-2. Open Terminal in the project folder and run `./build.sh`.
-3. Open **Vest Silo.app** from the project folder.
-4. Choose **Vest Silo → Connect to Vest…** in the menu bar and sign in on the Vest page. After connecting, you can close that window and use the widget.
+Vest Silo requires macOS 13 or later and runs on both Apple silicon and Intel Macs.
+
+1. Download **Vest-Silo-macOS.zip** under **Assets** on the [latest release](https://github.com/maxlongartist/vest-silo/releases/latest).
+2. Double-click the ZIP to extract it, then drag **Vest Silo.app** into **Applications** and open it.
+3. Choose **Vest Silo → Connect to Vest…** in the menu bar and sign in on the Vest page. After connecting, you can close that window and use the widget.
+
+The app is ad-hoc signed and has no Apple notarization. If macOS blocks the first launch and you trust the download, see [Apple’s instructions for opening an app from an unidentified developer](https://support.apple.com/en-us/102445).
 
 Vest Silo uses a separate WebKit session and requires no browser extension. On macOS 14 or newer, the app attempts to restore its saved session on launch. If Vest expires that session, open **Connect to Vest…** again.
 
@@ -15,7 +18,11 @@ Vest Silo uses a separate WebKit session and requires no browser extension. On m
 
 Open the gear in the widget or choose **Vest Silo → Settings…**. Set the width, height, opacity, font size, and screen position. Enable **Tuck away when collapsed** to keep just the compact status strip on screen. Click the strip to expand it again.
 
-To try the layout with sample positions before signing in, run `open -na "Vest Silo.app" --args --demo`.
+To try the layout with sample positions before signing in, run `open -na "/Applications/Vest Silo.app" --args --demo`.
+
+## Build from source
+
+Install Apple’s Command Line Tools with `xcode-select --install`, then run `./build.sh` from the repo folder and open the resulting **Vest Silo.app**. Use `./build.sh --universal` to build for both Mac architectures.
 
 ## Support the project
 

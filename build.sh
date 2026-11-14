@@ -29,5 +29,12 @@ cat > "$app/Info.plist" <<'PLIST'
 </dict></plist>
 PLIST
 cp source/session.js "$app/Resources/session.js"
-swiftc -O -target "$(uname -m)-apple-macos13.0" source/main.swift -o "$app/MacOS/VestIsland"
+if [[ "${1:-}" == "--universal" ]]; then
+  for arch in arm64 x86_64; do
+    swiftc -O -target "$arch-apple-macos13.0" source/main.swift -o "$icon_work/VestIsland-$arch"
+  done
+  lipo -create "$icon_work/VestIsland-arm64" "$icon_work/VestIsland-x86_64" -output "$app/MacOS/VestIsland"
+else
+  swiftc -O -target "$(uname -m)-apple-macos13.0" source/main.swift -o "$app/MacOS/VestIsland"
+fi
 codesign --force --sign - "Vest Silo.app"
