@@ -17,6 +17,10 @@ Open the gear in the widget or choose **Vest Silo → Settings…**. Set the wid
 
 To try the layout with sample positions before signing in, run `open -na "Vest Silo.app" --args --demo`.
 
+## Support the project
+
+Optional tips are welcome. Open **Settings → Donate to the dev** to copy a BTC, EVM, SOL, or TRX address.
+
 ## Privacy
 
 The widget reads account and position data from Vest. The embedded browser manages sign-in locally on your Mac. This repository contains source code and build assets only. Vest Silo is an unofficial project.

@@ -297,10 +297,35 @@ struct AppearanceView: View {
                     NSApp.terminate(nil)
                 }
             }
-
+            Divider()
+            VStack(alignment: .leading, spacing: 7) {
+                Text("Donate to the dev").font(.headline)
+                Text("If Vest Silo helps, tips are welcome and always optional.")
+                    .foregroundStyle(.secondary)
+                donation("BTC", "bc1pagpcm3j6r7cmhkeltwgkzqsrvepnfc9vt5eagclgzx6qscewqj5qdqeaxl")
+                donation("EVM", "0x17e8e07a5785e1cd3b7e525da5b3003bfeca4b6f")
+                donation("TRX", "TPjuRE45NaDHLNPtCThNDnzkudo5gnYq8s")
+                donation("SOL", "F9qqhcqUp59GeURBB7RGbCMRU5Q77qaP3UFkq24fQQDi")
+            }
         }
         .padding(20)
         .frame(width: 410)
+    }
+
+    @State private var copied: String?
+
+    func donation(_ network: String, _ address: String) -> some View {
+        HStack {
+            Text(network).fontWeight(.semibold).frame(width: 34, alignment: .leading)
+            Text(address).font(.system(.caption, design: .monospaced)).truncationMode(.middle).lineLimit(1)
+                .textSelection(.enabled)
+            Spacer()
+            Button(copied == network ? "Copied" : "Copy") {
+                NSPasteboard.general.clearContents()
+                if NSPasteboard.general.setString(address, forType: .string) { copied = network }
+            }
+            .accessibilityLabel("Copy " + network + " address")
+        }
     }
 
     func setting(_ title: String, value: Binding<Double>, range: ClosedRange<Double>, unit: String) -> some View {
@@ -473,7 +498,7 @@ final class IslandController: NSObject, NSApplicationDelegate, WKScriptMessageHa
 
     @objc func showSettings() {
         if settingsPanel == nil {
-            let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 410, height: 320),
+            let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 410, height: 510),
                 styleMask: [.titled, .closable], backing: .buffered, defer: false)
             panel.title = "Vest Silo Settings"
             panel.isReleasedWhenClosed = false
