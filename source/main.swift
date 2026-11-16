@@ -204,12 +204,13 @@ struct IslandView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(.horizontal)
                 } else {
-                    ScrollView([.vertical, .horizontal]) {
+                    ScrollView(.vertical) {
                         LazyVStack(alignment: .leading, spacing: 0) {
                             ForEach(model.accounts) { account in
                                 accountSection(account)
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 4)
                     }
@@ -239,32 +240,57 @@ struct IslandView: View {
         let label = hasNumber && labelParts.count >= 2
             ? labelParts.prefix(2).joined(separator: " ")
             : labelParts.first ?? account.label
-        return HStack(spacing: 9) {
-            Text(label).fontWeight(.semibold)
-            Text("DD \(money(account.drawdown))/\(money(account.limit))")
-                .foregroundStyle(.secondary)
-                .help("Drawdown used / maximum drawdown")
-            if let room = account.room {
-                Text("Room \(money(room))")
-                    .foregroundStyle(room <= 0 ? .red : .secondary)
-                    .help("Remaining room to the account loss floor")
+        let drawdown = "DD \(money(account.drawdown))/\(money(account.limit))"
+        let summary = Text(label).fontWeight(.semibold)
+            + Text("  \(drawdown)").foregroundColor(.secondary)
+        var full = summary
+        var compact = summary
+        if let room = account.room {
+            full = full + Text("  Room \(money(room))")
+                .foregroundColor(room <= 0 ? .red : .secondary)
+        }
+        if positions.isEmpty {
+            full = full + Text("  No open positions").foregroundColor(.secondary)
+        }
+        var detail = [label, drawdown]
+        if let room = account.room {
+            detail.append("Room \(money(room))")
+        }
+        if positions.isEmpty {
+            detail.append("No open positions")
+        }
+        for position in positions {
+            let market = position.market.replacingOccurrences(of: "-PERP", with: "")
+            let side = position.side.uppercased()
+            let pnl = money(position.pnl, signed: true)
+            let failLabel = position.failEstimated == false ? "Fail" : "Est. fail"
+            let prices = "Open \(price(position.entry))  Now \(price(position.current))  \(failLabel) \(price(position.fail))"
+            full = full + Text("  |  \(market) \(side)").fontWeight(.medium)
+                + Text("  \(pnl)").foregroundColor(pnlColor(position.pnl))
+                + Text("  \(prices)").foregroundColor(.secondary)
+            detail.append("\(market) \(side)  \(pnl)  \(prices)")
+            if positions.count == 1 {
+                compact = compact + Text("  \(market) \(side)").fontWeight(.medium)
+                    + Text("  \(pnl)").foregroundColor(pnlColor(position.pnl))
             }
-            if positions.isEmpty {
-                Text("No open positions").foregroundStyle(.secondary)
-            }
-            ForEach(positions) { position in
-                Divider().frame(height: model.fontSize)
-                Text(position.market.replacingOccurrences(of: "-PERP", with: "") + " " + position.side.uppercased())
-                    .fontWeight(.medium)
-                Text(money(position.pnl, signed: true)).foregroundStyle(pnlColor(position.pnl))
-                Text("Open \(price(position.entry))  Now \(price(position.current))  \(position.failEstimated == false ? "Fail" : "Est. fail") \(price(position.fail))")
-                    .foregroundStyle(.secondary)
-            }
+        }
+        if positions.count != 1 {
+            let count = positions.isEmpty ? "No positions" : "\(positions.count) positions"
+            compact = compact + Text("  \(count)").foregroundColor(.secondary)
+        }
+
+        return ViewThatFits(in: .horizontal) {
+            full.fixedSize(horizontal: true, vertical: false)
+            full.font(.system(size: model.fontSize * 0.85))
+                .fixedSize(horizontal: true, vertical: false)
+            compact.minimumScaleFactor(0.65)
         }
         .monospacedDigit()
         .lineLimit(1)
-        .fixedSize(horizontal: true, vertical: false)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: model.fontSize + 12)
+        .help(detail.joined(separator: "\n"))
+        .accessibilityLabel(Text(detail.joined(separator: ", ")))
     }
 
 }
@@ -420,6 +446,7 @@ final class IslandController: NSObject, NSApplicationDelegate, WKScriptMessageHa
         guard !model.demo else { return }
         if webWindow == nil {
             let configuration = WKWebViewConfiguration()
+            configuration.mediaTypesRequiringUserActionForPlayback = .all
             guard let id = UUID(uuidString: "BF4F6ED6-7F13-4499-A6C5-BB421C929633"),
                 let url = Bundle.main.url(forResource: "session", withExtension: "js"),
                 let script = try? String(contentsOf: url, encoding: .utf8) else { return }
@@ -449,7 +476,10 @@ final class IslandController: NSObject, NSApplicationDelegate, WKScriptMessageHa
             RunLoop.main.add(timer, forMode: .common)
             syncTimer = timer
             if let url = URL(string: "https://next.vestmarkets.com/trade/BTC-PERP") {
-                web.load(URLRequest(url: url))
+                // Suspend playback before Vest can start audio in the embedded browser.
+                web.setAllMediaPlaybackSuspended(true, completionHandler: { [weak web] in
+                    web?.load(URLRequest(url: url))
+                })
             }
         }
     }
