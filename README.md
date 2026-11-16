@@ -24,6 +24,12 @@ Open the gear in the widget or choose **Vest Silo → Settings…**. Use **Posit
 
 To try the layout with sample positions before signing in, run `open -na "/Applications/Vest Silo.app" --args --demo`.
 
+## On the desktop
+
+| Expanded widget | Collapsed status strip |
+| --- | --- |
+| ![Expanded Vest Silo at the top of the macOS desktop](docs/screenshots/desktop-expanded.jpg) | ![Collapsed Vest Silo at the top of the macOS desktop](docs/screenshots/desktop-collapsed.jpg) |
+
 ## Build from source
 
 Install Apple’s Command Line Tools with `xcode-select --install`, then run `./build.sh` from the repo folder and open the resulting **Vest Silo.app**. Use `./build.sh --universal` to build for both Mac architectures.
@@ -34,4 +40,4 @@ Optional tips are welcome. Open **Settings → Donate to the dev** to copy a BTC
 
 ## Privacy
 
-The widget reads account and position data from Vest. The embedded browser manages sign-in locally on your Mac. This repository contains source code and build assets only. Vest Silo is an unofficial project.
+The widget reads account and position data from Vest. The embedded browser manages sign-in locally on your Mac. This repository contains source code, build assets, and documentation. Vest Silo is an unofficial project.
