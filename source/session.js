@@ -102,7 +102,7 @@
       const symbols = [...new Set(rows.map(p => p.symbol))];
       const quoteAt = Date.now();
       const quotes = symbols.length ? await read('/v3/ticker/latest',null,{symbols:symbols.join(',')}) : {tickers:[]};
-      const marks = new Map(quotes.tickers.map(t => [t.symbol, number(t.marginMarkPrice) || number(t.markPrice)]));
+      const tickerBySymbol = new Map(quotes.tickers.map(ticker => [ticker.symbol, ticker]));
       const accounts = [];
       const ids = new Set();
       const entries = roster.accounts.filter(a => a.id && number(a.initial_capital) > 0);
@@ -133,15 +133,19 @@
           ids.add(accountId);
           accounts.push({id:accountId,label:'…'+accountId.slice(-6)});
         }
-        const size = number(p.quantity), entry = number(p.openPrice), mark = marks.get(p.symbol);
+        const size = number(p.quantity), entry = number(p.openPrice);
+        const ticker = tickerBySymbol.get(p.symbol);
+        // Vest's position P&L uses the trading quote rather than the margin quote.
+        const currentPrice = number(ticker?.markPrice);
+        const marginMark = number(ticker?.marginMarkPrice) || currentPrice;
         const side = String(p.side);
-        const pnl = mark > 0 && entry > 0 && (side === 'long' || side === 'short')
-          ? (mark-entry)*size*(side === 'long' ? 1 : -1) : null;
+        const pnl = currentPrice > 0 && entry > 0 && (side === 'long' || side === 'short')
+          ? (currentPrice-entry)*size*(side === 'long' ? 1 : -1) : null;
         const room = accountByID.get(accountId)?.room;
         const exposure = exposures.get(JSON.stringify([accountId,p.symbol]));
-        const estimated = room > 0 && mark > 0 && Math.abs(exposure) > 1e-12 ? mark-room/exposure : null;
+        const estimated = room > 0 && marginMark > 0 && Math.abs(exposure) > 1e-12 ? marginMark-room/exposure : null;
         const fail = number(p.failPrice ?? p.fail_price);
-        return {id:String(p.positionId),accountId,market:p.symbol,side,entry,current:mark,pnl,
+        return {id:String(p.positionId),accountId,market:p.symbol,side,entry,current:currentPrice > 0 ? currentPrice : null,pnl,
           fail:fail > 0 ? fail : estimated > 0 ? estimated : null,failEstimated:!(fail > 0)};
       });
       if (session === current) report({state:'live',at:quoteAt,accounts,positions});
