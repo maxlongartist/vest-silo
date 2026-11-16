@@ -2,6 +2,8 @@
 
 Vest Silo is a standalone macOS widget for tracking your Vest Markets positions. The collapsed bar shows your open position count and combined unrealized P&L. Expand it to see entry and current mark prices, estimated fail prices, and account drawdown in one row per account.
 
+![Expanded Vest Silo widget and its settings](docs/screenshots/expanded-and-settings.png)
+
 ## Install on macOS
 
 Vest Silo requires macOS 13 or later and runs on both Apple silicon and Intel Macs.
@@ -16,7 +18,9 @@ Vest Silo uses a separate WebKit session and requires no browser extension. On m
 
 ## Make it yours
 
-Open the gear in the widget or choose **Vest Silo → Settings…**. Set the width, height, opacity, font size, and screen position. Enable **Tuck away when collapsed** to keep just the compact status strip on screen. Click the strip to expand it again.
+Open the gear in the widget or choose **Vest Silo → Settings…**. Use **Position** to move the island to any corner or center it along any edge. You can also adjust its width, maximum expanded height, opacity, and font size. Enable **Tuck away when collapsed** to keep just the compact status strip on screen. Click the strip to expand it again.
+
+![Vest Silo tucked into a compact status strip](docs/screenshots/collapsed.png)
 
 To try the layout with sample positions before signing in, run `open -na "/Applications/Vest Silo.app" --args --demo`.
 
