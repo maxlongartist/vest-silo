@@ -18,7 +18,7 @@ Vest Silo uses a separate WebKit session and requires no browser extension. On m
 
 ## Make it yours
 
-Open the gear in the widget or choose **Vest Silo → Settings…**. Use **Position** to move the island to any corner or center it along any edge. You can also adjust its width, maximum expanded height, opacity, and font size. Enable **Tuck away when collapsed** to keep just the compact status strip on screen. Click the strip to expand it again.
+Open the gear in the widget or choose **Vest Silo → Settings…**. Use **Position** to move the island to any corner or center it along any edge. You can also adjust its width, expanded height, opacity, and font size. Enable **Tuck away when collapsed** to keep just the compact status strip on screen. Click the strip to expand it again.
 
 ![Vest Silo tucked into a compact status strip](docs/screenshots/collapsed.png)
 

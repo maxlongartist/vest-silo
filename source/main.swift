@@ -69,7 +69,7 @@ final class IslandModel: ObservableObject {
     @Published var refreshAge: Int?
     @Published var stale = false
     let demo: Bool
-    static let defaults: [String: Double] = ["width": 440, "height": 350, "opacity": 1, "fontSize": 12]
+    static let defaults: [String: Double] = ["width": 440, "height": 180, "opacity": 1, "fontSize": 12]
     @Published var width = IslandModel.setting("width") { didSet { UserDefaults.standard.set(width, forKey: "width") } }
     @Published var height = IslandModel.setting("height") { didSet { UserDefaults.standard.set(height, forKey: "height") } }
     @Published var opacity = IslandModel.setting("opacity") { didSet { UserDefaults.standard.set(opacity, forKey: "opacity") } }
@@ -243,54 +243,43 @@ struct IslandView: View {
         let drawdown = "DD \(money(account.drawdown))/\(money(account.limit))"
         let summary = Text(label).fontWeight(.semibold)
             + Text("  \(drawdown)").foregroundColor(.secondary)
-        var full = summary
-        var compact = summary
+        var accountLine = summary
         if let room = account.room {
-            full = full + Text("  Room \(money(room))")
+            accountLine = accountLine + Text("  Room \(money(room))")
                 .foregroundColor(room <= 0 ? .red : .secondary)
         }
         if positions.isEmpty {
-            full = full + Text("  No open positions").foregroundColor(.secondary)
-        }
-        var detail = [label, drawdown]
-        if let room = account.room {
-            detail.append("Room \(money(room))")
-        }
-        if positions.isEmpty {
-            detail.append("No open positions")
-        }
-        for position in positions {
-            let market = position.market.replacingOccurrences(of: "-PERP", with: "")
-            let side = position.side.uppercased()
-            let pnl = money(position.pnl, signed: true)
-            let failLabel = position.failEstimated == false ? "Fail" : "Est. fail"
-            let prices = "Open \(price(position.entry))  Now \(price(position.current))  \(failLabel) \(price(position.fail))"
-            full = full + Text("  |  \(market) \(side)").fontWeight(.medium)
-                + Text("  \(pnl)").foregroundColor(pnlColor(position.pnl))
-                + Text("  \(prices)").foregroundColor(.secondary)
-            detail.append("\(market) \(side)  \(pnl)  \(prices)")
-            if positions.count == 1 {
-                compact = compact + Text("  \(market) \(side)").fontWeight(.medium)
-                    + Text("  \(pnl)").foregroundColor(pnlColor(position.pnl))
-            }
-        }
-        if positions.count != 1 {
-            let count = positions.isEmpty ? "No positions" : "\(positions.count) positions"
-            compact = compact + Text("  \(count)").foregroundColor(.secondary)
+            accountLine = accountLine + Text("  No open positions").foregroundColor(.secondary)
         }
 
+        let inline = positions.reduce(accountLine) { row, position in
+            row + Text("  |  ") + positionLine(position)
+        }
         return ViewThatFits(in: .horizontal) {
-            full.fixedSize(horizontal: true, vertical: false)
-            full.font(.system(size: model.fontSize * 0.85))
-                .fixedSize(horizontal: true, vertical: false)
-            compact.minimumScaleFactor(0.65)
+            inline.lineLimit(1).fixedSize(horizontal: true, vertical: false)
+            VStack(alignment: .leading, spacing: 4) {
+                accountLine.fixedSize(horizontal: false, vertical: true)
+                ForEach(positions) { position in
+                    positionLine(position)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.leading, 10)
+                }
+            }
         }
         .monospacedDigit()
-        .lineLimit(1)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: model.fontSize + 12)
-        .help(detail.joined(separator: "\n"))
-        .accessibilityLabel(Text(detail.joined(separator: ", ")))
+        .padding(.vertical, 5)
+    }
+
+    private func positionLine(_ position: Snapshot.Position) -> Text {
+        let market = position.market.replacingOccurrences(of: "-PERP", with: "")
+        let side = position.side.uppercased()
+        let pnl = money(position.pnl, signed: true)
+        let failLabel = position.failEstimated == false ? "Fail" : "Est. fail"
+        let prices = "Open \(price(position.entry))  Now \(price(position.current))  \(failLabel) \(price(position.fail))"
+        return Text("\(market) \(side)").fontWeight(.medium)
+            + Text("  \(pnl)").foregroundColor(pnlColor(position.pnl))
+            + Text("  \(prices)").foregroundColor(.secondary)
     }
 
 }
@@ -307,13 +296,13 @@ struct AppearanceView: View {
             }
             Toggle("Tuck away when collapsed", isOn: $model.tuckWhenCollapsed)
             setting("Width", value: $model.width, range: 300...900, unit: "pt")
-            setting("Max expanded height", value: $model.height, range: 180...780, unit: "pt")
+            setting("Expanded height", value: $model.height, range: 90...780, unit: "pt")
             setting("Opacity", value: $model.opacity, range: 0.35...1, unit: "%")
             setting("Font size", value: $model.fontSize, range: 10...20, unit: "pt")
             HStack {
                 Button("Reset defaults") {
                     model.width = 440
-                    model.height = 350
+                    model.height = 180
                     model.opacity = 1
                     model.fontSize = 12
                     model.position = .top
@@ -418,7 +407,7 @@ final class IslandController: NSObject, NSApplicationDelegate, WKScriptMessageHa
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             guard let self else { return }
             self.model.refresh()
-            let size = CGSize(width: self.islandWidth, height: self.expandedHeight)
+            let size = CGSize(width: self.islandWidth, height: self.model.height)
             if self.state != self.model.expanded || self.previousSize != size || self.previousOpacity != self.model.opacity ||
                 self.previousPosition != self.model.position || self.previousTucked != self.model.isTucked {
                 let animate = self.previousTucked != self.model.isTucked
@@ -566,11 +555,6 @@ final class IslandController: NSObject, NSApplicationDelegate, WKScriptMessageHa
         for panel in panels { panel.orderFrontRegardless() }
     }
 
-    private var expandedHeight: Double {
-        let rows = max(1, model.accounts.count)
-        return min(model.height, 34 + 20 + Double(rows) * (model.fontSize + 12))
-    }
-
     private var islandWidth: CGFloat {
         model.isTucked ? min(model.width, max(208, 18 * model.fontSize)) : model.width
     }
@@ -583,7 +567,7 @@ final class IslandController: NSObject, NSApplicationDelegate, WKScriptMessageHa
                 width: max(1, visible.width - 16),
                 height: max(1, min(visible.maxY, safeTop) - visible.minY - 12))
             let size = CGSize(width: min(islandWidth, bounds.width),
-                height: min(model.expanded ? CGFloat(expandedHeight) : 34, bounds.height))
+                height: min(model.expanded ? CGFloat(model.height) : 34, bounds.height))
             panel.alphaValue = CGFloat(model.opacity)
             let origin = model.position.origin(in: bounds, size: size)
             let frame = CGRect(origin: origin, size: size)
