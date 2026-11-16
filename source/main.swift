@@ -520,6 +520,9 @@ final class IslandController: NSObject, NSApplicationDelegate, WKScriptMessageHa
             let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 410, height: 510),
                 styleMask: [.titled, .closable], backing: .buffered, defer: false)
             panel.title = "Vest Silo Settings"
+            // Keep Settings reachable even when the island fills the display.
+            panel.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
+            panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
             panel.isReleasedWhenClosed = false
             panel.contentView = NSHostingView(rootView: AppearanceView(model: model))
             panel.center()

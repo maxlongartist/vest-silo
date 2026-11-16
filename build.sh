@@ -22,8 +22,8 @@ cat > "$app/Info.plist" <<'PLIST'
 <key>CFBundleName</key><string>Vest Silo</string>
 <key>CFBundleIconFile</key><string>VestIsland.icns</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleVersion</key><string>4</string>
-<key>CFBundleShortVersionString</key><string>1.0.2</string>
+<key>CFBundleVersion</key><string>5</string>
+<key>CFBundleShortVersionString</key><string>1.0.3</string>
 <key>LSUIElement</key><true/>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 </dict></plist>
