@@ -81,6 +81,23 @@
     return value;
   }
 
+  async function positionTickers(symbols) {
+    if (!symbols.length) return [];
+    try {
+      const quotes = await read('/v3/ticker/latest', null, {symbols:symbols.join(',')});
+      return Array.isArray(quotes.tickers) ? quotes.tickers : [];
+    } catch (error) {
+      // Vest can reject the entire request when just one symbol is unknown.
+      if (error.message !== '400' || symbols.length === 1) return [];
+      const tickers = [];
+      for (let i = 0; i < symbols.length; i += 5) {
+        const results = await Promise.all(symbols.slice(i,i+5).map(symbol => positionTickers([symbol])));
+        tickers.push(...results.flat());
+      }
+      return tickers;
+    }
+  }
+
   async function refresh() {
     if (busy || !session) return;
     if (session.expires <= Date.now()) {
@@ -101,8 +118,8 @@
       if (rows.some(p => !(p.accountId ?? p.account_id) || !p.symbol || !p.positionId)) throw new Error('Incomplete positions');
       const symbols = [...new Set(rows.map(p => p.symbol))];
       const quoteAt = Date.now();
-      const quotes = symbols.length ? await read('/v3/ticker/latest',null,{symbols:symbols.join(',')}) : {tickers:[]};
-      const tickerBySymbol = new Map(quotes.tickers.map(ticker => [ticker.symbol, ticker]));
+      const tickers = await positionTickers(symbols);
+      const tickerBySymbol = new Map(tickers.map(ticker => [ticker.symbol, ticker]));
       const accounts = [];
       const ids = new Set();
       const entries = roster.accounts.filter(a => a.id && number(a.initial_capital) > 0);
@@ -150,9 +167,17 @@
       });
       if (session === current) report({state:'live',at:quoteAt,accounts,positions});
     } catch (error) {
-      if (session === current) report({state:error.message === '401' ? 'reconnecting' : 'error',at:Date.now()});
+      if (session === current) {
+        const unauthorized = error.message === '401';
+        if (unauthorized) {
+          session = undefined;
+          equity.clear();
+        }
+        report({state:unauthorized ? 'reconnecting' : 'error',at:Date.now()});
+      }
     } finally {
       busy = false;
+      if (session && session !== current) void refresh();
     }
   }
   window.addEventListener('vest-silo-refresh', () => { void refresh(); });

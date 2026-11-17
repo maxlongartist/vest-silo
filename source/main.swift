@@ -374,6 +374,11 @@ final class IslandController: NSObject, NSApplicationDelegate, WKScriptMessageHa
     private var lastRecovery: Date?
     private var recoveryAttempts = 0
     private var lastLiveUpdate: Date?
+    private var syncStartedAt: Date?
+    private var updateMissing: Bool {
+        guard let lastUpdate = lastLiveUpdate ?? syncStartedAt else { return false }
+        return Date().timeIntervalSince(lastUpdate) > 45
+    }
     private var needsRecovery = false
     private var recoveryNavigation: WKNavigation?
     private var previousSize = CGSize.zero
@@ -424,7 +429,7 @@ final class IslandController: NSObject, NSApplicationDelegate, WKScriptMessageHa
     @objc func showVest() {
         prepareVest()
         guard let webWindow else { return }
-        if needsRecovery, let web = webWindow.contentView as? WKWebView {
+        if needsRecovery || updateMissing, let web = webWindow.contentView as? WKWebView {
             _ = recoverVest(web, userRequested: true)
         }
         NSApp.activate(ignoringOtherApps: true)
@@ -456,10 +461,10 @@ final class IslandController: NSObject, NSApplicationDelegate, WKScriptMessageHa
             window.contentView = web
             window.center()
             webWindow = window
+            syncStartedAt = Date()
             let timer = Timer(timeInterval: 5, repeats: true) { [weak self, weak web] _ in
                 guard let self, let web else { return }
-                let updateMissing = self.lastLiveUpdate.map { Date().timeIntervalSince($0) > 45 } ?? false
-                if (self.needsRecovery || updateMissing), self.recoverVest(web) { return }
+                if (self.needsRecovery || self.updateMissing), self.recoverVest(web) { return }
                 web.evaluateJavaScript("window.dispatchEvent(new Event('vest-silo-refresh'))", completionHandler: nil)
             }
             RunLoop.main.add(timer, forMode: .common)
@@ -474,13 +479,15 @@ final class IslandController: NSObject, NSApplicationDelegate, WKScriptMessageHa
     }
 
     private func recoverVest(_ web: WKWebView, userRequested: Bool = false) -> Bool {
-        let retryAllowed = recoveryAttempts < 2 && (lastRecovery.map { Date().timeIntervalSince($0) >= 30 } ?? true)
+        let retryIntervals: [TimeInterval] = [30, 60, 120, 240, 300]
+        let delay = retryIntervals[min(max(0, recoveryAttempts - 1), retryIntervals.count - 1)]
+        let retryAllowed = lastRecovery.map { Date().timeIntervalSince($0) >= delay } ?? true
         guard !web.isLoading, userRequested || retryAllowed,
             web.url?.scheme == "https", web.url?.host == "next.vestmarkets.com" else { return false }
         // Let Vest restore its own login. Avoid reloading in front of someone signing in.
         guard userRequested || webWindow?.isVisible == false else { return false }
         lastRecovery = Date()
-        recoveryAttempts += 1
+        recoveryAttempts = min(recoveryAttempts + 1, retryIntervals.count)
         recoveryNavigation = web.reload()
         return recoveryNavigation != nil
     }
@@ -502,6 +509,7 @@ final class IslandController: NSObject, NSApplicationDelegate, WKScriptMessageHa
             UserDefaults.standard.set(true, forKey: "restoresVestSession")
             lastLiveUpdate = Date()
             recoveryAttempts = 0
+            lastRecovery = nil
             needsRecovery = false
         } else if next.state == "reconnecting" {
             needsRecovery = true
