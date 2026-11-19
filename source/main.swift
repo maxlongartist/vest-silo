@@ -64,7 +64,14 @@ final class IslandModel: ObservableObject {
     @Published var tuckWhenCollapsed = UserDefaults.standard.bool(forKey: "tuckWhenCollapsed") {
         didSet { UserDefaults.standard.set(tuckWhenCollapsed, forKey: "tuckWhenCollapsed") }
     }
-    var isTucked: Bool { tuckWhenCollapsed && !expanded }
+    @Published var pnlOnly = UserDefaults.standard.bool(forKey: "pnlOnly") {
+        didSet { UserDefaults.standard.set(pnlOnly, forKey: "pnlOnly") }
+    }
+    @Published var autoHide = UserDefaults.standard.bool(forKey: "autoHide") {
+        didSet { UserDefaults.standard.set(autoHide, forKey: "autoHide") }
+    }
+    var isPnlOnly: Bool { pnlOnly && !expanded }
+    var isTucked: Bool { (tuckWhenCollapsed || pnlOnly) && !expanded }
 
     @Published var refreshAge: Int?
     @Published var stale = false
@@ -149,19 +156,26 @@ struct IslandView: View {
                     model.expanded.toggle()
                 } label: {
                     HStack(spacing: 10) {
-                        Circle().fill(dotColor).frame(width: 7, height: 7)
-                        Text("Vest Silo").fontWeight(.semibold)
-                        if model.demo || model.snapshot?.state == "live" {
-                            Text("\(model.positions.count) open").foregroundStyle(.secondary)
-                            Text(money(model.pnl, signed: true)).monospacedDigit()
-                                .foregroundStyle(pnlColor(model.pnl))
-                            if model.demo || model.stale {
-                                Text(model.status).foregroundStyle(dotColor)
-                            }
+                        if model.isPnlOnly {
+                            Text(money((model.demo || model.snapshot?.state == "live") && model.positions.isEmpty ? 0 : model.pnl, signed: true))
+                                .monospacedDigit()
+                                .foregroundStyle(model.stale ? .orange : pnlColor(model.pnl))
+                                .help(model.status)
                         } else {
-                            Text(model.status).foregroundStyle(.secondary)
+                            Circle().fill(dotColor).frame(width: 7, height: 7)
+                            Text("Vest Silo").fontWeight(.semibold)
+                            if model.demo || model.snapshot?.state == "live" {
+                                Text("\(model.positions.count) open").foregroundStyle(.secondary)
+                                Text(money(model.pnl, signed: true)).monospacedDigit()
+                                    .foregroundStyle(pnlColor(model.pnl))
+                                if model.demo || model.stale {
+                                    Text(model.status).foregroundStyle(dotColor)
+                                }
+                            } else {
+                                Text(model.status).foregroundStyle(.secondary)
+                            }
                         }
-                        Spacer(minLength: 0)
+                        if !model.isPnlOnly { Spacer(minLength: 0) }
                         if !model.isTucked {
                             Image(systemName: model.expanded ? "chevron.up" : "chevron.down")
                                 .font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
@@ -295,6 +309,8 @@ struct AppearanceView: View {
                 }
             }
             Toggle("Tuck away when collapsed", isOn: $model.tuckWhenCollapsed)
+            Toggle("Show only total P&L when collapsed", isOn: $model.pnlOnly)
+            Toggle("Auto-hide at screen edge when collapsed", isOn: $model.autoHide)
             setting("Width", value: $model.width, range: 300...900, unit: "pt")
             setting("Expanded height", value: $model.height, range: 90...780, unit: "pt")
             setting("Opacity", value: $model.opacity, range: 0.35...1, unit: "%")
@@ -307,6 +323,8 @@ struct AppearanceView: View {
                     model.fontSize = 12
                     model.position = .top
                     model.tuckWhenCollapsed = false
+                    model.pnlOnly = false
+                    model.autoHide = false
                 }
                 Button("Quit Vest Silo") {
                     NSApp.terminate(nil)
@@ -358,6 +376,28 @@ struct AppearanceView: View {
 }
 
 final class IslandPanel: NSPanel {
+    var lastHover = Date.distantPast
+
+    func edgeFrames(shown: CGRect, screen: CGRect, position: IslandPosition) -> (hidden: CGRect, trigger: CGRect) {
+        var hidden = shown
+        var trigger = shown
+        switch position {
+        case .left, .topLeft, .bottomLeft:
+            hidden.origin.x = screen.minX - shown.width
+            trigger = CGRect(x: screen.minX, y: shown.minY, width: 6, height: shown.height)
+        case .right, .topRight, .bottomRight:
+            hidden.origin.x = screen.maxX
+            trigger = CGRect(x: screen.maxX - 6, y: shown.minY, width: 6, height: shown.height)
+        case .top:
+            hidden.origin.y = screen.maxY
+            trigger = CGRect(x: shown.minX, y: screen.maxY - 6, width: shown.width, height: 6)
+        case .bottom:
+            hidden.origin.y = screen.minY - shown.height
+            trigger = CGRect(x: shown.minX, y: screen.minY, width: shown.width, height: 6)
+        }
+        return (hidden, trigger)
+    }
+
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 }
@@ -414,7 +454,7 @@ final class IslandController: NSObject, NSApplicationDelegate, WKScriptMessageHa
             self.model.refresh()
             let size = CGSize(width: self.islandWidth, height: self.model.height)
             if self.state != self.model.expanded || self.previousSize != size || self.previousOpacity != self.model.opacity ||
-                self.previousPosition != self.model.position || self.previousTucked != self.model.isTucked {
+                self.previousPosition != self.model.position || self.previousTucked != self.model.isTucked || self.model.autoHide || self.panels.contains(where: { $0.ignoresMouseEvents }) {
                 let animate = self.previousTucked != self.model.isTucked
                 self.previousTucked = self.model.isTucked
                 self.previousSize = size
@@ -525,7 +565,7 @@ final class IslandController: NSObject, NSApplicationDelegate, WKScriptMessageHa
 
     @objc func showSettings() {
         if settingsPanel == nil {
-            let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 410, height: 510),
+            let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 410, height: 580),
                 styleMask: [.titled, .closable], backing: .buffered, defer: false)
             panel.title = "Vest Silo Settings"
             // Keep Settings reachable even when the island fills the display.
@@ -567,7 +607,11 @@ final class IslandController: NSObject, NSApplicationDelegate, WKScriptMessageHa
     }
 
     private var islandWidth: CGFloat {
-        model.isTucked ? min(model.width, max(208, 18 * model.fontSize)) : model.width
+        if model.isPnlOnly {
+            let text = money((model.demo || model.snapshot?.state == "live") && model.positions.isEmpty ? 0 : model.pnl, signed: true)
+            return min(model.width, max(70, (text as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: model.fontSize)]).width + 24))
+        }
+        return model.isTucked ? min(model.width, max(208, 18 * model.fontSize)) : model.width
     }
 
     func layout(animate: Bool = false) {
@@ -579,15 +623,27 @@ final class IslandController: NSObject, NSApplicationDelegate, WKScriptMessageHa
                 height: max(1, min(visible.maxY, safeTop) - visible.minY - 12))
             let size = CGSize(width: min(islandWidth, bounds.width),
                 height: min(model.expanded ? CGFloat(model.height) : 34, bounds.height))
-            panel.alphaValue = CGFloat(model.opacity)
             let origin = model.position.origin(in: bounds, size: size)
-            let frame = CGRect(origin: origin, size: size)
-            if animate, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            let shown = CGRect(origin: origin, size: size)
+            let edges = panel.edgeFrames(shown: shown, screen: screen.frame, position: model.position)
+            let mouse = NSEvent.mouseLocation
+            let autoHide = model.autoHide && !model.expanded
+            if edges.trigger.contains(mouse) || (!panel.ignoresMouseEvents && shown.contains(mouse)) {
+                panel.lastHover = Date()
+            }
+            let hidden = autoHide && Date().timeIntervalSince(panel.lastHover) > 0.8
+            let frame = hidden ? edges.hidden : shown
+            let changed = panel.ignoresMouseEvents != hidden
+            panel.ignoresMouseEvents = hidden
+            let opacity = hidden ? 0 : CGFloat(model.opacity)
+            if (animate || changed), !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
                 NSAnimationContext.runAnimationGroup { context in
                     context.duration = 0.18
+                    panel.animator().alphaValue = opacity
                     panel.animator().setFrame(frame, display: true)
                 }
             } else {
+                panel.alphaValue = opacity
                 panel.setFrame(frame, display: true)
             }
         }
