@@ -377,6 +377,8 @@ struct AppearanceView: View {
 
 final class IslandPanel: NSPanel {
     var lastHover = Date.distantPast
+    var targetFrame: CGRect?
+    var targetOpacity: CGFloat?
 
     func edgeFrames(shown: CGRect, screen: CGRect, position: IslandPosition) -> (hidden: CGRect, trigger: CGRect) {
         var hidden = shown
@@ -384,18 +386,18 @@ final class IslandPanel: NSPanel {
         switch position {
         case .left, .topLeft, .bottomLeft:
             hidden.origin.x = screen.minX - shown.width
-            trigger = CGRect(x: screen.minX, y: shown.minY, width: 6, height: shown.height)
+            trigger = CGRect(x: screen.minX, y: shown.minY - 48, width: 16, height: shown.height + 96)
         case .right, .topRight, .bottomRight:
             hidden.origin.x = screen.maxX
-            trigger = CGRect(x: screen.maxX - 6, y: shown.minY, width: 6, height: shown.height)
+            trigger = CGRect(x: screen.maxX - 16, y: shown.minY - 48, width: 16, height: shown.height + 96)
         case .top:
             hidden.origin.y = screen.maxY
-            trigger = CGRect(x: shown.minX, y: screen.maxY - 6, width: shown.width, height: 6)
+            trigger = CGRect(x: shown.minX - 48, y: screen.maxY - 16, width: shown.width + 96, height: 16)
         case .bottom:
             hidden.origin.y = screen.minY - shown.height
-            trigger = CGRect(x: shown.minX, y: screen.minY, width: shown.width, height: 6)
+            trigger = CGRect(x: shown.minX - 48, y: screen.minY, width: shown.width + 96, height: 16)
         }
-        return (hidden, trigger)
+        return (hidden, trigger.intersection(screen))
     }
 
     override var canBecomeKey: Bool { false }
@@ -406,6 +408,7 @@ final class IslandController: NSObject, NSApplicationDelegate, WKScriptMessageHa
     let model = IslandModel(demo: CommandLine.arguments.contains("--demo"))
     private var panels: [IslandPanel] = []
     private var timer: Timer?
+    private var hoverTimer: Timer?
     private var state = false
     private var statusItem: NSStatusItem?
     private var settingsPanel: NSPanel?
@@ -449,6 +452,12 @@ final class IslandController: NSObject, NSApplicationDelegate, WKScriptMessageHa
         } else if UserDefaults.standard.bool(forKey: "restoresVestSession") {
             prepareVest()
         }
+        let hover = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
+            guard let self, self.model.autoHide, !self.model.expanded else { return }
+            self.layout()
+        }
+        RunLoop.main.add(hover, forMode: .common)
+        hoverTimer = hover
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             guard let self else { return }
             self.model.refresh()
@@ -614,7 +623,7 @@ final class IslandController: NSObject, NSApplicationDelegate, WKScriptMessageHa
         return model.isTucked ? min(model.width, max(208, 18 * model.fontSize)) : model.width
     }
 
-    func layout(animate: Bool = false) {
+    func layout(animate: Bool = false, mouseLocation: CGPoint = NSEvent.mouseLocation) {
         for (panel, screen) in zip(panels, NSScreen.screens) {
             let visible = screen.visibleFrame
             let safeTop = screen.frame.maxY - max(screen.safeAreaInsets.top, 24)
@@ -626,16 +635,19 @@ final class IslandController: NSObject, NSApplicationDelegate, WKScriptMessageHa
             let origin = model.position.origin(in: bounds, size: size)
             let shown = CGRect(origin: origin, size: size)
             let edges = panel.edgeFrames(shown: shown, screen: screen.frame, position: model.position)
-            let mouse = NSEvent.mouseLocation
+            let mouse = mouseLocation
             let autoHide = model.autoHide && !model.expanded
-            if edges.trigger.contains(mouse) || (!panel.ignoresMouseEvents && shown.contains(mouse)) {
+            if edges.trigger.contains(mouse) || (!panel.ignoresMouseEvents && edges.trigger.union(shown).insetBy(dx: -8, dy: -8).contains(mouse)) {
                 panel.lastHover = Date()
             }
-            let hidden = autoHide && Date().timeIntervalSince(panel.lastHover) > 0.8
+            let hidden = autoHide && Date().timeIntervalSince(panel.lastHover) > 1.2
             let frame = hidden ? edges.hidden : shown
             let changed = panel.ignoresMouseEvents != hidden
             panel.ignoresMouseEvents = hidden
             let opacity = hidden ? 0 : CGFloat(model.opacity)
+            guard panel.targetFrame != frame || panel.targetOpacity != opacity else { continue }
+            panel.targetFrame = frame
+            panel.targetOpacity = opacity
             if (animate || changed), !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
                 NSAnimationContext.runAnimationGroup { context in
                     context.duration = 0.18
